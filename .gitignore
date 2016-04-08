@@ -1,0 +1,7 @@
+*.ko
+*.o
+*.cmd
+Module.symvers
+dm-dedup.mod.c
+modules.order
+.tmp_versions/
