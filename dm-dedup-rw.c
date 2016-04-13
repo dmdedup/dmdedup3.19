@@ -166,7 +166,7 @@ static struct bio *prepare_bio_with_pbn(struct dedup_config *dc,
 	struct page_list *pl;
 	struct bio *clone = NULL;
 
-	pl = kmalloc(sizeof(pl), GFP_NOIO);
+	pl = kmalloc(sizeof(struct page_list), GFP_NOIO);
 	if (!pl)
 		goto out;
 
