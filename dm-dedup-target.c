@@ -335,14 +335,28 @@ static int handle_write(struct dedup_config *dc, struct bio *bio)
 		bio = new_bio;
 	}
 
+	printk("r = %d\n", r);
+	printk("ref = %d\n", atomic_read(&bio->bi_cnt));
+	printk("orig ref = %d\n", atomic_read(&(((struct bio *)bio->bi_private)->bi_cnt)));
+
 	lbn = bio_lbn(dc, bio);
 
 	r = compute_hash_bio(dc->desc_table, bio, hash);
 	if (r)
 		return r;
 
+	printk("r = %d\n", r);
+	printk("ref = %d\n", atomic_read(&bio->bi_cnt));
+	printk("orig ref = %d\n", atomic_read(&(((struct bio *)bio->bi_private)->bi_cnt)));
+
 	r = dc->kvs_hash_pbn->kvs_lookup(dc->kvs_hash_pbn, hash,
 				dc->crypto_key_size, &hashpbn_value, &vsize);
+
+	printk("r = %d\n", r);
+	printk("ref = %d\n", atomic_read(&bio->bi_cnt));
+	printk("orig ref = %d\n", atomic_read(&(((struct bio *)bio->bi_private)->bi_cnt)));
+
+	return -EIO;
 
 	if (r == 0)
 		r = handle_write_no_hash(dc, bio, lbn, hash);
