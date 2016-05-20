@@ -55,24 +55,29 @@ static int merge_data(struct dedup_config *dc, struct page *page,
 	sector_t bi_sector = bio->bi_iter.bi_sector;
 	void *src_page_vaddr, *dest_page_vaddr;
 	int position, err = 0;
+	struct bvec_iter iter;
+	struct bio_vec bvec;
 
 	/* Relative offset in terms of sector size */
 	position = sector_div(bi_sector, dc->sectors_per_block);
 
-	if (!page || !bio->bi_io_vec->bv_page) {
+	if (!page || !bio_page(bio)) {
 		err = -EINVAL;
 		goto out;
 	}
 
-	src_page_vaddr = page_address(bio->bi_io_vec->bv_page);
-	dest_page_vaddr = page_address(page);
-
-	src_page_vaddr = src_page_vaddr + bio->bi_io_vec->bv_offset;
 	/* Locating the right sector to merge */
-	dest_page_vaddr = dest_page_vaddr + (to_bytes(position));
+	dest_page_vaddr = page_address(page) + to_bytes(position);
+	
+	bio_for_each_segment(bvec, bio, iter) {
+		src_page_vaddr = page_address(bio_iter_page(bio, iter)) + bio_iter_offset(bio, iter);
 
-	/* Merging Data */
-	memmove(dest_page_vaddr, src_page_vaddr, bio->bi_io_vec->bv_len);
+		/* Merging Data */
+		memmove(dest_page_vaddr, src_page_vaddr, bio_iter_len(bio, iter));
+
+		/* Updating destinaion address */
+		dest_page_vaddr += bio_iter_len(bio, iter);
+	}
 out:
 	return err;
 }
@@ -82,7 +87,7 @@ static void copy_pages(struct page *src, struct bio *clone)
 	void *src_page_vaddr, *dest_page_vaddr;
 
 	src_page_vaddr = page_address(src);
-	dest_page_vaddr = page_address(clone->bi_io_vec->bv_page);
+	dest_page_vaddr = page_address(bio_page(clone));
 
 	memmove(dest_page_vaddr, src_page_vaddr, DMD_IO_SIZE);
 }
@@ -218,7 +223,7 @@ static struct bio *prepare_bio_without_pbn(struct dedup_config *dc,
 
 	my_zero_fill_bio(clone);
 
-	r = merge_data(dc, clone->bi_io_vec->bv_page, bio);
+	r = merge_data(dc, bio_page(clone), bio);
 	if (r < 0)
 		return ERR_PTR(r);
 out:
