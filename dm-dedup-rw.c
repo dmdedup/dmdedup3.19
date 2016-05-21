@@ -116,20 +116,6 @@ static void my_endio(struct bio *clone, int error)
 	bio_put(clone);
 }
 
-/*
- * XXX: there  is existing zero_fill_bio() in the kernel,
- * should we use it?
- */
-static void my_zero_fill_bio(struct bio *bio)
-{
-	void *data;
-	unsigned int length;
-
-	data = bio_data(bio);
-	length = bio_cur_bytes(bio);
-	memset(data, 0, length);
-}
-
 static struct bio *create_bio(struct dedup_config *dc,
 			      struct bio *bio)
 {
@@ -221,7 +207,7 @@ static struct bio *prepare_bio_without_pbn(struct dedup_config *dc,
 	if (!clone)
 		goto out;
 
-	my_zero_fill_bio(clone);
+	zero_fill_bio(clone);
 
 	r = merge_data(dc, bio_page(clone), bio);
 	if (r < 0)
