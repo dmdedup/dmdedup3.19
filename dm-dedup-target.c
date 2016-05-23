@@ -60,6 +60,12 @@ static uint64_t bio_lbn(struct dedup_config *dc, struct bio *bio)
 	return lbn;
 }
 
+static void do_io_remap_device(struct dedup_config *dc, struct bio *bio)
+{
+	bio->bi_bdev = dc->data_dev->bdev;
+	generic_make_request(bio);
+}
+
 static void do_io(struct dedup_config *dc, struct bio *bio, uint64_t pbn)
 {
 	int offset;
@@ -67,9 +73,7 @@ static void do_io(struct dedup_config *dc, struct bio *bio, uint64_t pbn)
 	offset = sector_div(bio->bi_iter.bi_sector, dc->sectors_per_block);
 	bio->bi_iter.bi_sector = (sector_t)pbn * dc->sectors_per_block + offset;
 
-	bio->bi_bdev = dc->data_dev->bdev;
-
-	generic_make_request(bio);
+	do_io_remap_device(dc, bio);
 }
 
 static int handle_read(struct dedup_config *dc, struct bio *bio)
@@ -368,6 +372,14 @@ static int handle_write(struct dedup_config *dc, struct bio *bio)
 static void process_bio(struct dedup_config *dc, struct bio *bio)
 {
 	int r;
+
+	if (bio->bi_rw & (REQ_FLUSH | REQ_FUA) && !bio_sectors(bio)) {
+		r = dc->mdops->flush_meta(dc->bmd);
+		if (r == 0)
+			dc->writes_after_flush = 0;
+		do_io_remap_device(dc, bio);
+		return;
+	}
 
 	switch (bio_data_dir(bio)) {
 	case READ:
@@ -749,6 +761,9 @@ static int dm_dedup_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	r = dm_set_target_max_io_len(ti, dc->sectors_per_block);
 	if (r)
 		goto bad_kvstore_init;
+
+	ti->num_flush_bios = 1;
+	ti->flush_supported = true;
 
 	ti->num_flush_bios = 1;
 	ti->flush_supported = true;
