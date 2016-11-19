@@ -334,8 +334,10 @@ static int handle_write(struct dedup_config *dc, struct bio *bio)
 	if (bio->bi_iter.bi_size < dc->block_size) {
 		dc->reads_on_writes++;
 		new_bio = prepare_bio_on_write(dc, bio);
-		if (!new_bio || IS_ERR(new_bio))
+		if (!new_bio)
 			return -ENOMEM;
+		else if(IS_ERR(new_bio))
+			return PTR_ERR(new_bio);
 		bio = new_bio;
 	}
 
