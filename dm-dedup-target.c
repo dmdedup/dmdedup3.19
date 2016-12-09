@@ -26,10 +26,6 @@
 #define MIN_DATA_DEV_BLOCK_SIZE (4 * 1024)
 #define MAX_DATA_DEV_BLOCK_SIZE (1024 * 1024)
 
-struct on_disk_stats {
-	uint64_t physical_block_counter;
-	uint64_t logical_block_counter;
-};
 
 /*
  * All incoming requests are packed in the dedup_work structure
@@ -614,8 +610,8 @@ static int dm_dedup_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	sector_t data_size;
 	int r;
 	int crypto_key_size;
-
-	struct on_disk_stats *data = NULL;
+	struct on_disk_stats d;
+	struct on_disk_stats *data = &d;
 	uint64_t logical_block_counter = 0;
 	uint64_t physical_block_counter = 0;
 
@@ -723,6 +719,8 @@ static int dm_dedup_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		ti->error = "failed to flush metadata";
 		goto bad_kvstore_init;
 	}
+
+	if(!unformatted) printk("System is formatted\n");
 
 	if (!unformatted && dc->mdops->get_private_data) {
 		r = dc->mdops->get_private_data(md, (void **)&data,

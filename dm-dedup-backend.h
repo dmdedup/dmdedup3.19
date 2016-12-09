@@ -15,9 +15,15 @@
 
 struct metadata;		/* metadata store identifier */
 struct kvstore;			/* key-value store identifier */
+struct on_disk_stats;
 
 #define BF_NEGATIVE -1
 #define BF_POSITIVE 0
+
+struct on_disk_stats {
+        uint64_t physical_block_counter;
+        uint64_t logical_block_counter;
+};
 
 struct metadata_ops {
 	/*
