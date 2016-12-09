@@ -103,6 +103,7 @@ static int __commit_transaction(struct metadata *md)
 	size_t metadata_len, data_len;
 	struct metadata_superblock *disk_super;
 	struct dm_block *sblock;
+
 	BUILD_BUG_ON(sizeof(struct metadata_superblock) > 512);
 
 	r = dm_sm_commit(md->data_sm);
@@ -148,6 +149,7 @@ static int __commit_transaction(struct metadata *md)
 
 out:
 	return r;
+
 out_locked:
 	dm_bm_unlock(sblock);
 	return r;
@@ -760,7 +762,6 @@ int get_private_data_cowbtree(struct metadata *md, void **data,
         dm_bm_unlock(sblock);
 
         return r;
-
 }
 
 int set_private_data_cowbtree(struct metadata *md, void *data, uint32_t size)
