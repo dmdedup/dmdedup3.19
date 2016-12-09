@@ -15,7 +15,6 @@
 
 struct metadata;		/* metadata store identifier */
 struct kvstore;			/* key-value store identifier */
-struct on_disk_stats;
 
 #define BF_NEGATIVE -1
 #define BF_POSITIVE 0
