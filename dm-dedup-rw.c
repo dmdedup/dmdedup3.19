@@ -96,17 +96,17 @@ static void my_endio(struct bio *clone, int error)
 {
 	unsigned rw = bio_data_dir(clone);
 	struct bio *orig;
-	struct bio_vec bv;
+	struct bio_vec *bv;
 
 	if (!error && !bio_flagged(clone, BIO_UPTODATE))
 		error = -EIO;
 
 	/* free the processed pages */
 	if (rw == WRITE || rw == READ) {
-		bv = bio_iovec(clone);
-		if (bv.bv_page) {
-			free_pages((unsigned long)page_address(bv.bv_page), 0);
-			bv.bv_page = NULL;
+		bv = clone->bi_io_vec;
+		if (bv->bv_page) {
+			free_pages((unsigned long)page_address(bv->bv_page), 0);
+			bv->bv_page = NULL;
 		}
 	}
 
