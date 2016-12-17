@@ -49,7 +49,7 @@ static int fetch_whole_block(struct dedup_config *dc,
 	return dm_io(&iorq, 1, &where, &error_bits);
 }
 
-static int merge_data(struct dedup_config *dc, struct page *page,
+static void merge_data(struct dedup_config *dc, struct page *page,
 		      struct bio *bio)
 {
 	sector_t bi_sector = bio->bi_iter.bi_sector;
@@ -61,14 +61,9 @@ static int merge_data(struct dedup_config *dc, struct page *page,
 	/* Relative offset in terms of sector size */
 	position = sector_div(bi_sector, dc->sectors_per_block);
 
-	if (!page || !bio_page(bio)) {
-		err = -EINVAL;
-		goto out;
-	}
-
 	/* Locating the right sector to merge */
 	dest_page_vaddr = page_address(page) + to_bytes(position);
-	
+
 	bio_for_each_segment(bvec, bio, iter) {
 		src_page_vaddr = page_address(bio_iter_page(bio, iter)) + bio_iter_offset(bio, iter);
 
@@ -78,8 +73,6 @@ static int merge_data(struct dedup_config *dc, struct page *page,
 		/* Updating destinaion address */
 		dest_page_vaddr += bio_iter_len(bio, iter);
 	}
-out:
-	return err;
 }
 
 static void copy_pages(struct page *src, struct bio *clone)
@@ -157,6 +150,11 @@ static struct bio *prepare_bio_with_pbn(struct dedup_config *dc,
 	struct page_list *pl;
 	struct bio *clone = NULL;
 
+	if (!bio_page(bio)) {
+		r = -EINVAL;
+		goto out;
+	}
+
 	pl = kmalloc(sizeof(*pl), GFP_NOIO);
 	if (!pl)
 		goto out;
@@ -176,9 +174,7 @@ static struct bio *prepare_bio_with_pbn(struct dedup_config *dc,
 	if (r < 0)
 		goto out_fail;
 
-	r = merge_data(dc, pl->page, bio);
-	if (r < 0)
-		goto out_fail;
+	merge_data(dc, pl->page, bio);
 
 	clone = create_bio(dc, bio);
 	if (!clone)
@@ -203,16 +199,23 @@ static struct bio *prepare_bio_without_pbn(struct dedup_config *dc,
 	int r = 0;
 	struct bio *clone = NULL;
 
+	if (!bio_page(bio)) {
+		r = -EINVAL;
+		goto out;
+	}
+
 	clone = create_bio(dc, bio);
 	if (!clone)
 		goto out;
 
 	zero_fill_bio(clone);
 
-	r = merge_data(dc, bio_page(clone), bio);
+	merge_data(dc, bio_page(clone), bio);
+
+out:
 	if (r < 0)
 		return ERR_PTR(r);
-out:
+
 	return clone;
 }
 
