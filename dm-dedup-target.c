@@ -768,9 +768,6 @@ static int dm_dedup_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	ti->num_flush_bios = 1;
 	ti->flush_supported = true;
 
-	ti->num_flush_bios = 1;
-	ti->flush_supported = true;
-
 	ti->private = dc;
 
 	return 0;
