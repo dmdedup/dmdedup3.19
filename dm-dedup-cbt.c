@@ -42,6 +42,9 @@ struct metadata {
 	 */
 	struct kvstore_cbt *kvs_linear;
 	struct kvstore_cbt *kvs_sparse;
+
+	uint64_t physical_nr_blocks; /* Number of physical blocks used */
+	uint64_t logical_nr_blocks; /* Number of logical blocks used */
 };
 
 struct kvstore_cbt {
@@ -68,6 +71,8 @@ struct metadata_superblock {
 	__le64 hash_pbn_root; /* hash pbn btree root. */
 	__le32 data_block_size;	/* In bytes */
 	__le32 metadata_block_size; /* In bytes */
+	__le64 physical_nr_blocks; /* Number of physical blocks used */
+	__le64 logical_nr_blocks; /* Number of logical blocks used */
 	__le64 metadata_nr_blocks;/* Number of metadata blocks used. */
 } __packed;
 
@@ -89,6 +94,9 @@ static int __begin_transaction(struct metadata *md)
 
 	if (md->kvs_sparse)
 		md->kvs_sparse->root = le64_to_cpu(disk_super->hash_pbn_root);
+
+	md->physical_nr_blocks = le64_to_cpu(disk_super->physical_nr_blocks);
+	md->logical_nr_blocks = le64_to_cpu(disk_super->logical_nr_blocks);
 
 	dm_bm_unlock(sblock);
 
@@ -143,6 +151,9 @@ static int __commit_transaction(struct metadata *md)
 	if (r < 0)
 		goto out_locked;
 
+	disk_super->physical_nr_blocks = cpu_to_le64(md->physical_nr_blocks);
+	disk_super->logical_nr_blocks = cpu_to_le64(md->logical_nr_blocks);
+
 	r = dm_tm_commit(md->tm, sblock);
 
 out:
@@ -192,6 +203,9 @@ static int write_initial_superblock(struct metadata *md)
 			    data_len);
 	if (r < 0)
 		goto bad_locked;
+
+	disk_super->physical_nr_blocks = cpu_to_le64(md->physical_nr_blocks);
+	disk_super->logical_nr_blocks = cpu_to_le64(md->logical_nr_blocks);
 
 	return dm_tm_commit(md->tm, sblock);
 
@@ -311,6 +325,9 @@ static struct metadata *init_meta_cowbtree(void *input_param, bool *unformatted)
 	md->tm = tm;
 	md->meta_sm = meta_sm;
 	md->data_sm = data_sm;
+
+	md->physical_nr_blocks = 0;
+	md->logical_nr_blocks = 0;
 
 	ret = write_initial_superblock(md);
 	if (ret < 0) {
@@ -739,6 +756,26 @@ badtree:
 	return (struct kvstore *) kvs;
 }
 
+int get_private_data_cowbtree(struct metadata *md, void **data, uint32_t size)
+{
+	struct on_disk_stats **disk_data = (struct on_disk_stats **) data;
+
+	(*disk_data)->physical_block_counter = md->physical_nr_blocks;
+	(*disk_data)->logical_block_counter = md->logical_nr_blocks;
+
+	return 0;
+}
+
+int set_private_data_cowbtree(struct metadata *md, void *data, uint32_t size)
+{
+	struct on_disk_stats *disk_data = (struct on_disk_stats *) data;
+
+	md->physical_nr_blocks = disk_data->physical_block_counter;
+	md->logical_nr_blocks = disk_data->logical_block_counter;
+
+	return 0;
+}
+
 struct metadata_ops metadata_ops_cowbtree = {
 	.init_meta = init_meta_cowbtree,
 	.exit_meta = exit_meta_cowbtree,
@@ -753,4 +790,6 @@ struct metadata_ops metadata_ops_cowbtree = {
 	.flush_meta = flush_meta_cowbtree,
 
 	.flush_bufio_cache = NULL,
+	.get_private_data = get_private_data_cowbtree,
+	.set_private_data = set_private_data_cowbtree,
 };
