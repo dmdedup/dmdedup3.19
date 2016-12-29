@@ -66,6 +66,8 @@ struct metadata_superblock {
 	__u8 data_space_map_root[SPACE_MAP_ROOT_SIZE]; /* Data space map */
 	__le64 lbn_pbn_root; /* lbn pbn btree root. */
 	__le64 hash_pbn_root; /* hash pbn btree root. */
+	__le64 physical_block_counter; /* number of physical blocks used */
+	__le64 logical_block_counter; /* number of logical blocks used */
 	__le32 data_block_size;	/* In bytes */
 	__le32 metadata_block_size; /* In bytes */
 	__le64 metadata_nr_blocks;/* Number of metadata blocks used. */
@@ -739,6 +741,63 @@ badtree:
 	return (struct kvstore *) kvs;
 }
 
+int get_private_data_cowbtree(struct metadata *md, void **data,
+			uint32_t size)
+{	
+        int r;
+        struct metadata_superblock *disk_super;
+        struct dm_block *sblock;
+	struct on_disk_stats **disk_data = (struct on_disk_stats **) data;
+
+        r = dm_bm_read_lock(md->meta_bm, METADATA_SUPERBLOCK_LOCATION,
+                            NULL, &sblock);
+        if (r)
+                return r;
+
+        disk_super = dm_block_data(sblock);
+
+        (*disk_data)->physical_block_counter = le64_to_cpu(disk_super->physical_block_counter);
+        (*disk_data)->logical_block_counter = le64_to_cpu(disk_super->logical_block_counter);
+
+        dm_bm_unlock(sblock);
+
+        return r;
+}
+
+int set_private_data_cowbtree(struct metadata *md, void *data, uint32_t size)
+{
+
+	int r = 0;
+	struct metadata_superblock *disk_super;
+	struct dm_block *sblock;
+        struct on_disk_stats *disk_data = (struct on_disk_stats *) data;
+
+	BUILD_BUG_ON(sizeof(struct metadata_superblock) > 512);
+
+	r = dm_sm_commit(md->data_sm);
+	if (r < 0)
+		goto out;
+
+	r = dm_tm_pre_commit(md->tm);
+	if (r < 0)
+		goto out;
+
+	r = dm_bm_write_lock(md->meta_bm, METADATA_SUPERBLOCK_LOCATION,
+			     NULL, &sblock);
+	if (r)
+		goto out;
+
+	disk_super = dm_block_data(sblock);
+
+	disk_super->physical_block_counter = cpu_to_le64(disk_data->physical_block_counter);
+        disk_super->logical_block_counter = cpu_to_le64(disk_data->logical_block_counter);
+
+	r = dm_tm_commit(md->tm, sblock);
+
+out:
+	return r;
+}
+
 struct metadata_ops metadata_ops_cowbtree = {
 	.init_meta = init_meta_cowbtree,
 	.exit_meta = exit_meta_cowbtree,
@@ -753,4 +812,6 @@ struct metadata_ops metadata_ops_cowbtree = {
 	.flush_meta = flush_meta_cowbtree,
 
 	.flush_bufio_cache = NULL,
+	.get_private_data = get_private_data_cowbtree,
+	.set_private_data = set_private_data_cowbtree,
 };

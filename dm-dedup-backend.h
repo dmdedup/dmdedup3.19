@@ -19,6 +19,11 @@ struct kvstore;			/* key-value store identifier */
 #define BF_NEGATIVE -1
 #define BF_POSITIVE 0
 
+struct on_disk_stats {
+        uint64_t physical_block_counter;
+        uint64_t logical_block_counter;
+};
+
 struct metadata_ops {
 	/*
 	 * Returns ERR_PTR(*) on error.
