@@ -30,6 +30,7 @@
 #define METADATA_CACHESIZE 64  /* currently block manager ignores this value */
 #define METADATA_MAXLOCKS 5
 #define METADATA_SUPERBLOCK_LOCATION 0
+#define PRIVATE_DATA_SIZE 16
 
 struct metadata {
 	struct dm_block_manager *meta_bm;
@@ -42,6 +43,8 @@ struct metadata {
 	 */
 	struct kvstore_cbt *kvs_linear;
 	struct kvstore_cbt *kvs_sparse;
+
+	uint8_t private_data[PRIVATE_DATA_SIZE];
 };
 
 struct kvstore_cbt {
@@ -68,6 +71,7 @@ struct metadata_superblock {
 	__le64 hash_pbn_root; /* hash pbn btree root. */
 	__le32 data_block_size;	/* In bytes */
 	__le32 metadata_block_size; /* In bytes */
+	__u8 private_data[PRIVATE_DATA_SIZE]; /* Dmdedup counters */
 	__le64 metadata_nr_blocks;/* Number of metadata blocks used. */
 } __packed;
 
@@ -89,6 +93,8 @@ static int __begin_transaction(struct metadata *md)
 
 	if (md->kvs_sparse)
 		md->kvs_sparse->root = le64_to_cpu(disk_super->hash_pbn_root);
+
+	memcpy(md->private_data, disk_super->private_data, PRIVATE_DATA_SIZE);
 
 	dm_bm_unlock(sblock);
 
@@ -142,6 +148,8 @@ static int __commit_transaction(struct metadata *md)
 			    data_len);
 	if (r < 0)
 		goto out_locked;
+
+	memcpy(disk_super->private_data, md->private_data, PRIVATE_DATA_SIZE);
 
 	r = dm_tm_commit(md->tm, sblock);
 
@@ -739,6 +747,24 @@ badtree:
 	return (struct kvstore *) kvs;
 }
 
+int get_private_data_cowbtree(struct metadata *md, void **data, uint32_t size)
+{
+	if(size > sizeof(md->private_data))
+		return -1;
+
+	memcpy(*data, md->private_data, size);
+	return 0;
+}
+
+int set_private_data_cowbtree(struct metadata *md, void *data, uint32_t size)
+{
+	if(size > sizeof(md->private_data))
+		return -1;
+
+	memcpy(md->private_data, data, size);
+	return 0;
+}
+
 struct metadata_ops metadata_ops_cowbtree = {
 	.init_meta = init_meta_cowbtree,
 	.exit_meta = exit_meta_cowbtree,
@@ -753,4 +779,6 @@ struct metadata_ops metadata_ops_cowbtree = {
 	.flush_meta = flush_meta_cowbtree,
 
 	.flush_bufio_cache = NULL,
+	.get_private_data = get_private_data_cowbtree,
+	.set_private_data = set_private_data_cowbtree,
 };
