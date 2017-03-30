@@ -26,6 +26,13 @@
 #define MIN_DATA_DEV_BLOCK_SIZE (4 * 1024)
 #define MAX_DATA_DEV_BLOCK_SIZE (1024 * 1024)
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,8,0) // 4.8-rc1
+#define bi_rw bi_opf
+#ifndef REQ_FLUSH
+#define REQ_FLUSH REQ_PREFLUSH
+#endif
+#endif
+
 struct on_disk_stats {
 	uint64_t physical_block_counter;
 	uint64_t logical_block_counter;
