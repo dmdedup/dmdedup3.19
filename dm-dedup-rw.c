@@ -104,8 +104,8 @@ static void my_endio(struct bio *clone, int error)
 	}
 
 	orig = clone->bi_private;
+	bio_put(orig);
 	bio_endio(orig, 0);
-
 	bio_put(clone);
 }
 
@@ -119,11 +119,18 @@ static struct bio *create_bio(struct dedup_config *dc,
 	if (!clone)
 		goto out;
 
+	printk("origref = %d\n", atomic_read(&bio->bi_cnt));
+	printk("origref = %d\n", atomic_read(&clone->bi_cnt));
+
 	clone->bi_bdev = bio->bi_bdev;
 	clone->bi_rw = bio->bi_rw;
 	clone->bi_iter.bi_sector = compute_sector(bio, dc);
 	clone->bi_private = bio;  /* for later completion */
+	bio_get(bio);
 	clone->bi_end_io = my_endio;
+
+	printk("origref = %d\n", atomic_read(&bio->bi_cnt));
+	printk("origref = %d\n", atomic_read(&clone->bi_cnt));
 
 	page = alloc_pages(GFP_NOIO, 0);
 	if (!page)
